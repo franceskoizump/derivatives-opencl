@@ -1,14 +1,20 @@
 #include <iostream>
+#include "stdlib.h"
 #include "CL/cl.hpp"
 #include <vector>
 #include <complex>
 #include <fstream>
 #include <streambuf>
 
-#define SIZE 20
+//#define SIZE 20
 
-int main()
+int main(int argc, char* argv[])
 {
+    int SIZE = 100;
+    int del = 1;
+    if (argc > 1 && strcmp(argv[1], "-x") == 0 ) SIZE = atoi(argv[2]);
+    if (argc > 3 && strcmp(argv[3], "-d") == 0 ) del = atoi(argv[4]);
+    std::cout << del <<  std::endl;
     float* r = new float[SIZE*SIZE]();
     
     float* grid = new float[SIZE * SIZE];
@@ -39,7 +45,7 @@ int main()
     
     cl::Context context({default_device});
     cl::Program::Sources sources;
-    std::ifstream codecl("code1.cl");
+    std::ifstream codecl("code_dx.cl");
     std::stringstream buffer_str;
     buffer_str << codecl.rdbuf();
     std::string code = buffer_str.str();
@@ -64,7 +70,7 @@ int main()
 
     kernel_add.setArg(0, in);
     kernel_add.setArg(1, res);
-    kernel_add.setArg(2, max_mem, NULL);
+    kernel_add.setArg(2, max_mem / del, NULL);
 
     queue.enqueueNDRangeKernel(kernel_add,
                                cl::NullRange,
