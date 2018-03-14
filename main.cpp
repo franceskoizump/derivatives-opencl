@@ -5,16 +5,19 @@
 #include <complex>
 #include <fstream>
 #include <streambuf>
+#include <chrono>
 
-//#define SIZE 20
 
 int main(int argc, char* argv[])
 {
-    int SIZE = 100;
+    int SIZE = 128;
     int del = 1;
-    if (argc > 1 && strcmp(argv[1], "-x") == 0 ) SIZE = atoi(argv[2]);
-    if (argc > 3 && strcmp(argv[3], "-d") == 0 ) del = atoi(argv[4]);
-    std::cout << del <<  std::endl;
+    size_t x_block = 0;
+    size_t y_block = 0;
+    if (argc > 2 && strcmp(argv[1], "-s") == 0 ) SIZE = atoi(argv[2]);
+    if (argc > 4 && strcmp(argv[3], "-d") == 0 ) del = atoi(argv[4]);
+    if (argc > 6 && strcmp(argv[5], "-x") == 0 ) x_block = atoi(argv[6]);
+    if (argc > 8 && strcmp(argv[7], "-y") == 0 ) y_block = atoi(argv[8]);
     float* r = new float[SIZE*SIZE]();
     
     float* grid = new float[SIZE * SIZE];
@@ -28,19 +31,15 @@ int main(int argc, char* argv[])
     std::vector<cl::Platform> all_platform;
 
     cl::Platform::get(&all_platform);
-    for (int i = 0; i < all_platform.size(); i++) 
-        std::cout << all_platform[i].getInfo<CL_PLATFORM_NAME>();
-    std::cout << std::endl;
+
     cl::Platform default_platform = all_platform[0];
     
 
     std::vector<cl::Device> devices;
     default_platform.getDevices(CL_DEVICE_TYPE_CPU, &devices);
-   
     cl::Device default_device = devices[0];
     size_t max_x = 
                     default_device.getInfo < CL_DEVICE_MAX_WORK_GROUP_SIZE >();
-    std::cout << max_x << std::endl;
     size_t max_mem = default_device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();
     
     cl::Context context({default_device});
@@ -64,24 +63,25 @@ int main(int argc, char* argv[])
     cl::CommandQueue queue(context, default_device);
     cl::Kernel kernel_add = cl::Kernel(program, "func");
     cl::Buffer in(context, grid, grid+SIZE*SIZE,
-                 CL_MEM_READ_WRITE, CL_MEM_USE_HOST_PTR);
+                 CL_MEM_READ_ONLY, CL_MEM_USE_HOST_PTR);
     cl::Buffer res(context, r,    r+SIZE*SIZE,
-                 CL_MEM_READ_WRITE, CL_MEM_USE_HOST_PTR);
+                 CL_MEM_WRITE_ONLY, CL_MEM_USE_HOST_PTR);
 
+    auto start = std::chrono::high_resolution_clock::now();
     kernel_add.setArg(0, in);
     kernel_add.setArg(1, res);
     kernel_add.setArg(2, max_mem / del, NULL);
-
     queue.enqueueNDRangeKernel(kernel_add,
                                cl::NullRange,
                                cl::NDRange(SIZE, SIZE),
-                               cl::NullRange);
+                            (x_block == 0 || y_block == 0) ? cl::NullRange
+                                              : cl::NDRange(x_block, y_block) );
 
 
     queue.finish();
 
     cl::copy(res, r, r+SIZE*SIZE);
-    
+    auto end = std::chrono::high_resolution_clock::now();
 
     float max = -2;
     for (int i = 0; i < SIZE; i++)
@@ -92,9 +92,7 @@ int main(int argc, char* argv[])
                 std::abs((float)cos(i / (float)SIZE + j / (float)SIZE) - r[id]));
         }
 
-std::cout << std::endl
-          << max << std::endl
-          << std::endl;
-
-return 0;
+    std::cout << SIZE << " " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " "
+              << max << std::endl;
+    return 0;
 }
